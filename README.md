@@ -77,6 +77,10 @@ eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiw
 
 https://119.23.74.36:6443/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/
 
+http://119.23.74.36:30090
+
+
+
 # 生成client-certificate-data
 grep 'client-certificate-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.crt
 
@@ -87,3 +91,84 @@ grep 'client-key-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d
 openssl pkcs12 -export -clcerts -inkey kubecfg.key -in kubecfg.crt -out kubecfg.p12 -name "kubernetes-client"
 
 ```
+
+
+k8s 部署：
+
+```js
+// Initializing your master
+kubeadm init
+kubeadm init --config /data/k8s-install/kubeadm.conf
+
+// Tear down
+kubectl drain <node name> --delete-local-data --force --ignore-daemonsets
+kubectl delete node <node name>
+
+kubeadm reset
+
+// non-root user(非root用户执行)
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+// root user
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+// make a record(记录下来)
+// kubeadm join --token <token> <master-ip>:<master-port> --discovery-token-ca-cert-hash sha256:<hash>
+kubeadm join 172.18.173.191:6443 --token ild2t0.iv0cg9d2pe42z7if --discovery-token-ca-cert-hash sha256:6326fbb11696022c92aabf1467ceacc243f53bef1e51db46b756f0077f0604b7
+
+
+// Installing a pod network(安装网络)
+// flannel
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.10.0/Documentation/kube-flannel.yml
+
+// Canal
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/canal.yaml
+
+// 查看pods状态
+kubectl get pods --all-namespaces
+
+// 测试 DNS 解析是否正常
+kubectl run curl --image=radial/busyboxplus:curl -i --tty
+nslookup kubernetes.default
+
+// master node参与工作负载
+kubectl taint nodes --all node-role.kubernetes.io/master-
+
+// Joining your nodes (在节点机上执行)
+// kubeadm join --token <token> <master-ip>:<master-port> --discovery-token-ca-cert-hash sha256:<hash>
+
+// 查看节点状态 (master 节点上)
+kubectl get nodes
+
+// 查看K8S集群状态
+kubectl get cs
+
+```
+
+k8s dashboard 安装：
+
+```js
+kubectl create -f https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
+
+
+```
+
+```js
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+    ports:
+    - containerPort: 80
+
+
+```
+
